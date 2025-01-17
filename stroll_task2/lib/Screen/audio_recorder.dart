@@ -1,14 +1,78 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 
-class AudioRecorder extends StatefulWidget {
-  const AudioRecorder({super.key});
+class AudioPage extends StatefulWidget {
+  const AudioPage({super.key});
 
   @override
-  State<AudioRecorder> createState() => _AudioRecorderState();
+  State<AudioPage> createState() => _AudioRecorderState();
 }
 
-class _AudioRecorderState extends State<AudioRecorder> {
+class _AudioRecorderState extends State<AudioPage> {
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  final AudioRecorder _recorder = AudioRecorder();
+  bool _isRecording = false;
+  String? _filePath;
+  double _currentPosition = 0;
+  double _totalDuration = 0;
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    _recorder.dispose();
+    super.dispose();
+  }
+
+  Future<void> _startRecording() async {
+    final bool isPermissionGranted = await _recorder.hasPermission();
+    if (!isPermissionGranted) {
+      return;
+    }
+
+    final directory = await getApplicationDocumentsDirectory();
+    // Generate a unique file name using the current timestamp
+    String fileName = 'recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    _filePath = '${directory.path}/$fileName';
+
+    // Define the configuration for the recording
+    const config = RecordConfig(
+      // Specify the format, encoder, sample rate, etc., as needed
+      encoder: AudioEncoder.aacLc, // For example, using AAC codec
+      sampleRate: 44100, // Sample rate
+      bitRate: 128000, // Bit rate
+    );
+
+    // Start recording to file with the specified configuration
+    await _recorder.start(config, path: _filePath!);
+    setState(() {
+      _isRecording = true;
+    });
+  }
+
+  Future<void> _stopRecording() async {
+    final path = await _recorder.stop();
+    setState(() {
+      _isRecording = false;
+    });
+  }
+
+  Future<void> _playRecording() async {
+    if (_filePath != null) {
+      await _audioPlayer.setFilePath(_filePath!);
+      _totalDuration = _audioPlayer.duration?.inSeconds.toDouble() ?? 0;
+      _audioPlayer.play();
+
+      _audioPlayer.positionStream.listen((position) {
+        setState(() {
+          _currentPosition = position.inSeconds.toDouble();
+        });
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -106,6 +170,9 @@ class _AudioRecorderState extends State<AudioRecorder> {
                   ),
                 ),
               ),
+              SizedBox(
+                height: 5,
+              ),
               Text(
                 "What is your favorite time of the day?",
                 textAlign: TextAlign.center,
@@ -114,7 +181,26 @@ class _AudioRecorderState extends State<AudioRecorder> {
                     fontSize: 24,
                     fontWeight: FontWeight.bold),
               ),
-
+              SizedBox(
+                height: 5,
+              ),
+              Text(
+                '"Mine is definitely the peace in the morning."',
+                style: GoogleFonts.figtree(
+                    fontSize: 13,
+                    color: Color.fromARGB(197, 203, 201, 255),
+                    fontStyle: FontStyle.italic),
+              ),
+              Slider(
+                value: _currentPosition,
+                max: _totalDuration,
+                onChanged: (value) {
+                  setState(() {
+                    _currentPosition = value;
+                  });
+                  _audioPlayer.seek(Duration(seconds: value.toInt()));
+                },
+              ),
               //Here the wave of recoding
               //
               //
@@ -130,13 +216,26 @@ class _AudioRecorderState extends State<AudioRecorder> {
                           color: const Color.fromARGB(255, 255, 255, 255),
                           fontSize: 13),
                     ),
-                    onPressed: () {},
+                    onPressed: _isRecording ? _stopRecording : null,
                   ),
                   Container(
                     decoration: BoxDecoration(
-                        shape: BoxShape.circle, color: Colors.amber),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white,
+                        width: 2,
+                      ),
+                    ),
                     height: 52,
                     width: 52,
+                    child: IconButton(
+                      onPressed: _isRecording ? null : _startRecording,
+                      icon: Icon(
+                        _isRecording ? Icons.mic : Icons.mic_none,
+                        size: 20,
+                        color: _isRecording ? Colors.red : Colors.blue,
+                      ),
+                    ),
                   ),
                   TextButton(
                     child: Text(
@@ -145,7 +244,7 @@ class _AudioRecorderState extends State<AudioRecorder> {
                           color: const Color.fromARGB(255, 255, 255, 255),
                           fontSize: 13),
                     ),
-                    onPressed: () {},
+                    onPressed: !_isRecording ? _playRecording : null,
                   ),
                 ],
               ),

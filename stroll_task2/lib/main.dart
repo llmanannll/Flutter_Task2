@@ -14,7 +14,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       initialRoute: 'audio_recorder',
       routes: {
-        'audio_recorder': (context) => AudioRecorder(),
+        'audio_recorder': (context) => AudioPage(),
       },
     );
   }
